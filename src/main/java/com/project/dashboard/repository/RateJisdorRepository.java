@@ -13,6 +13,6 @@ import java.util.List;
 public interface RateJisdorRepository extends JpaRepository<RateJisdor, Integer> {
 
 
-    @Query(value = "SELECT * FROMd dashboard.rate_jisdor ORDER BY created_date DESC limit 1", nativeQuery = true)
+    @Query(value = "SELECT * FROM dashboard.rate_jisdor ORDER BY created_date DESC limit 1", nativeQuery = true)
     List<RateJisdor> getLatestRateJisdor();
 }

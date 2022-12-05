@@ -19,6 +19,7 @@ public class BankAccount {
     @NotNull
     @Column(name = "bank_account_number")
     private String bank_account_number;
+
     @NotNull
     @Column(name = "bank_account_name")
     private String bank_account_name;

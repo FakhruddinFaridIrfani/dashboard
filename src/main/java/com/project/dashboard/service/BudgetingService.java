@@ -1,13 +1,18 @@
 package com.project.dashboard.service;
 
+import com.project.dashboard.controller.MasterDataController;
 import com.project.dashboard.model.BankAccount;
 import com.project.dashboard.model.BaseResponse;
 import com.project.dashboard.model.Budgeting;
 import com.project.dashboard.model.Vendor;
 import com.project.dashboard.repository.*;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.sql.SQLException;
@@ -23,7 +28,9 @@ public class BudgetingService {
     @Autowired
     VendorRepository vendorRepository;
 
+    RestTemplate restTemplate;
 
+    Logger logger = LoggerFactory.getLogger(BudgetingService.class);
     @Autowired
     UserService userService;
 
@@ -157,19 +164,31 @@ public class BudgetingService {
         String charge_to;
 
         String budgeting_transfer_type;
+        String userToken;
+
+        String corporateId = "COMPANYMB2";
         try {
             jsonInput = new JSONObject(input);
+            userToken = jsonInput.optString("userToken");
 
             billing_date = jsonInput.getString("billing_date");
             payment_plan_date = jsonInput.getString("payment_plan_date");
             SimpleDateFormat sdformat = new SimpleDateFormat("yyyy-MM-dd");
             Date d1 = sdformat.parse(billing_date);
             Date d2 = sdformat.parse(payment_plan_date);
-            if (d1.compareTo(d2) > 0) {
+            if (d1.after(d2)) {
                 response.setStatus("500");
                 response.setSuccess(false);
                 response.setMessage("Payment date cannot set before the billing date");
+                return response;
             }
+//            if(d1.compareTo(d2) > 0) {
+//               logger.info("Date 1 occurs after Date 2");
+//            } else if(d1.compareTo(d2) < 0) {
+//                logger.info("Date 1 occurs before Date 2");
+//            } else if(d1.compareTo(d2) == 0) {
+//                logger.info("Both dates are equal");
+//            }
             beneficiary_account_to = jsonInput.getString("beneficiary_account_to");
 
             //Get Vendor information
@@ -178,6 +197,7 @@ public class BudgetingService {
                 response.setStatus("404");
                 response.setSuccess(false);
                 response.setMessage("cannot found vendor for account number : " + beneficiary_account_to);
+                return response;
             }
             Vendor vendor = vendorList.get(0);
             primary_energy_type = vendor.getVendor_primary_energy_type();
@@ -186,6 +206,7 @@ public class BudgetingService {
 
 
             from_account = jsonInput.getString("from_account");
+
             beneficiary_account_type = jsonInput.getString("beneficiary_account_type");
             beneficiary_instruction_mode_type = jsonInput.getString("beneficiary_instruction_mode_type");
             beneficiary_notifications_flag = jsonInput.optString("beneficiary_notifications_flag");
@@ -201,13 +222,21 @@ public class BudgetingService {
             beneficiary_reference_number = jsonInput.optString("beneficiary_reference_number");
             transaction_purpose = jsonInput.getString("transaction_purpose");
 
-            exchange_rate = jsonInput.getString("exchange_rate");
-            exchange_rate_value = jsonInput.getDouble("exchange_rate_value");
-            services = jsonInput.getString("services");
-            charge_to = jsonInput.getString("charge_to");
+            budgeting_transfer_type = jsonInput.getString("budgeting_transfer_type");
+            if (budgeting_transfer_type.compareToIgnoreCase("inhouse") == 0) {
+                exchange_rate = "";
+                exchange_rate_value = 1.0;
+                services = "";
+                charge_to = "";
+            } else {
+                exchange_rate = jsonInput.getString("exchange_rate");
+                exchange_rate_value = jsonInput.getDouble("exchange_rate_value");
+                services = jsonInput.getString("services");
+                charge_to = jsonInput.getString("charge_to");
+            }
+
 
             inhouse_transaction_type = jsonInput.optString("inhouse_transaction_type");
-            budgeting_transfer_type = jsonInput.getString("budgeting_transfer_type");
 
 
             Budgeting budgeting = new Budgeting();
@@ -241,8 +270,19 @@ public class BudgetingService {
             budgeting.setBudgeting_transfer_type(budgeting_transfer_type);
             budgeting.setCreated_by(created_by);
             budgeting.setUpdated_by(created_by);
+            budgeting.setCreated_date(new Date());
+            budgeting.setUpdated_date(new Date());
 
             budgetingRepository.save(budgeting);
+
+            //POSTING DATA TO BNI DIRECT
+//            if (budgeting_transfer_type.compareToIgnoreCase("inhouse") == 0) {
+//
+//            }
+
+            response.setStatus("200");
+            response.setSuccess(true);
+            response.setMessage("Success adding new budgeting transaction");
 
         } catch (Exception e) {
             response.setStatus("500");
@@ -254,4 +294,25 @@ public class BudgetingService {
     }
 
 
+    public void post(JSONObject request, String completeUrl) throws Exception {
+        JSONObject req = new JSONObject();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<String> entity = new HttpEntity<>(request.toString(), headers);
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(completeUrl, HttpMethod.POST, entity, String.class);
+            if (response.getStatusCode() == HttpStatus.OK) {
+
+//                budgetingRepository.updateBudgetingStatus();
+            } else {
+                throw new RuntimeException(response.getStatusCode().getReasonPhrase());
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException(e.getMessage());
+        }
+
+
+    }
 }
